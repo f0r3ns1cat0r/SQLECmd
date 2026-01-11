@@ -1,8 +1,8 @@
 Description: Firefox Downloads - Places.sqlite
-Author: Andrew Rathbun
+Author: Andrew Rathbun, Reece394
 Email: andrew.d.rathbun@gmail.com
 Id: f5d66594-1b5a-45f7-8cdf-57d76d646649
-Version: 1.1
+Version: 1.2
 CSVPrefix: Firefox
 FileName: places.sqlite
 IdentifyQuery: SELECT count(*) FROM sqlite_master WHERE type='table' AND (name='moz_historyvisits' OR name='moz_bookmarks' OR name='moz_places' OR name='moz_inputhistory');
@@ -18,8 +18,10 @@ Queries:
                	datetime( lastModified / 1000000, 'unixepoch' ) AS LastModified
                FROM
                	moz_annos
+               INNER JOIN
+               	moz_anno_attributes ON moz_annos.anno_attribute_id = moz_anno_attributes.id
                WHERE
-               	anno_attribute_id IN (1,2)
+               	moz_anno_attributes.name IN ('downloads/destinationFileURI','downloads/destinationFileName','downloads/metaData')
                ORDER BY
                	moz_annos.dateAdded ASC
         BaseFileName: Downloads-PlacesDB
