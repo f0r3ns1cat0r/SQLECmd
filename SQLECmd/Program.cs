@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.CommandLine;
 using System.CommandLine.Help;
-using System.CommandLine.NamingConventionBinder;
+using System.CommandLine.Invocation;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -11,7 +11,7 @@ using System.Net;
 using System.Net.Http;
 using System.Reflection;
 using System.Threading.Tasks;
-#if NET6_0_OR_GREATER
+#if NET9_0_OR_GREATER
 using System.Runtime.InteropServices;
 #endif
 using CsvHelper;
@@ -27,7 +27,7 @@ using ServiceStack.OrmLite;
 using ServiceStack.OrmLite.Dapper;
 using SQLECmd.Properties;
 using SQLMaps;
-#if NET462
+#if !NET9_0_OR_GREATER
 using Alphaleonis.Win32.Filesystem;
 using Alphaleonis.Win32.Security;
 using Directory = Alphaleonis.Win32.Filesystem.Directory;
@@ -48,7 +48,7 @@ internal class Program
     private static readonly string BaseDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
 
     private static readonly string Header =
-        $"SQLECmd version {Assembly.GetExecutingAssembly().GetName().Version}" +
+        $"SQLECmd version {Assembly.GetExecutingAssembly().GetName().Version.ToString(3)}" +
         "\r\n\r\nAuthor: Eric Zimmerman (saericzimmerman@gmail.com)" +
         "\r\nhttps://github.com/EricZimmerman/SQLECmd";
 
@@ -72,66 +72,96 @@ internal class Program
 
         JsConfig.IncludeNullValues = true;
         JsConfig.IncludeNullValuesInDictionaries = true;
+        
+        var fOpt = new Option<string>("-f")
+        {
+            Description = "File to recursively process. Either this or -d is required"
+        };
+        
+        var dOpt = new Option<string>("-d")
+        {
+            Description = "Directory to recursively process. Either this or -f is required"
+        };
+        var csvOpt = new Option<string>(
+            "--csv")
+        {
+            Description = "Directory to save CSV formatted results to. Be sure to include the full path in double quotes"
+        };
+        var jsonOpt = new Option<string>(
+            "--json")
+        {
+            Description = "Directory to save JSON formatted results to. Be sure to include the full path in double quotes"
+        };
+        var blobdirOpt = new Option<string>(
+            "--blobdir")
+        {
+            Description = "Directory to save JSON formatted results to. Be sure to include the full path in double quotes"
+        };
+        var mapsOpt = new Option<string>(
+            "--maps")
+        {
+            Description = "Directory to save JSON formatted results to. Be sure to include the full path in double quotes",
+            DefaultValueFactory = _ => Path.Combine(BaseDirectory, "Maps")
+        };
+        
+        var dedupeOpt = new Option<bool>("--dedupe")
+        {
+            Description = "Deduplicate -f or -d files based on SHA-1. First file found wins",
+            DefaultValueFactory = _ => true
+        };
+        var huntOpt = new Option<bool>("--hunt")
+        {
+            Description = "When true, all files are looked at regardless of name and file header is used to identify SQLite files, else filename in map is used to find databases",
+            DefaultValueFactory = _ => true
+        };
+        
+        var debugOpt = new Option<bool>("--debug")
+        {
+            Description = "Show debug information during processing",
+            DefaultValueFactory = _ => false
+        };
+        var traceOpt = new Option<bool>("--trace")
+        {
+            Description = "Show trace information during processing",
+            DefaultValueFactory = _ => false
+        };
+        
+        var syncOpt = new Option<bool>("--sync")
+        {
+            Description = "If true, the latest maps from https://github.com/EricZimmerman/SQLECmd/tree/master/SQLMap/Maps are downloaded and local maps updated",
+            DefaultValueFactory = _ => false
+        };
+        
+        var noblobOpt = new Option<bool>("--noblob")
+        {
+            Description = "If true, the latest maps from If true, disables blob extraction from query results are downloaded and local maps updated",
+            DefaultValueFactory = _ => false
+        };
 
         _rootCommand = new RootCommand
         {
-            new Option<string>(
-                "-f",
-                "File to process. This or -d is required"),
-            new Option<string>(
-                "-d",
-                "Directory to process that contains SQLite files. This or -f is required"),
-            new Option<string>(
-                "--csv",
-                "Directory to save CSV formatted results to"),
-            new Option<string>(
-                "--json",
-                "Directory to save JSON formatted results to"),
-            new Option<string>(
-                "--blobdir",
-                "Directory to save blob files to"),    
-
-            new Option<bool>(
-                "--dedupe",
-                () => true,
-                "Deduplicate -f or -d files based on SHA-1. First file found wins"),
-
-            new Option<bool>(
-                "--hunt",
-                () => false,
-                "When true, all files are looked at regardless of name and file header is used to identify SQLite files, else filename in map is used to find databases"),
-
-            new Option<string>(
-                "--maps",
-                () => Path.Combine(BaseDirectory, "Maps"),
-                "The path where event maps are located. Defaults to 'Maps' folder where program was executed"),
-
-            new Option<bool>(
-                "--sync",
-                () => false,
-                "If true, the latest maps from https://github.com/EricZimmerman/SQLECmd/tree/master/SQLMap/Maps are downloaded and local maps updated"),
-
-            new Option<bool>(
-                "--debug",
-                () => false,
-                "Show debug information during processing"),
-
-            new Option<bool>(
-                "--trace",
-                () => false,
-                "Show trace information during processing"),
-
-            new Option<bool>(
-                "--noblob",
-                () => false,
-                "If true, disables blob extraction from query results")
+           fOpt,
+           dOpt,
+           csvOpt,
+           jsonOpt,
+           blobdirOpt,
+           dedupeOpt,
+           huntOpt,
+           mapsOpt,
+           syncOpt,
+           debugOpt,
+           traceOpt,
+           noblobOpt
+         
         };
 
         _rootCommand.Description = Header + "\r\n\r\n" + Footer;
 
-        _rootCommand.Handler = CommandHandler.Create(DoWork);
-
-        await _rootCommand.InvokeAsync(args);
+        _rootCommand.SetAction(result => DoWork(result.GetValue(fOpt), result.GetValue(dOpt), result.GetValue(csvOpt),
+            result.GetValue(jsonOpt), result.GetValue(blobdirOpt), result.GetValue(dedupeOpt), result.GetValue(huntOpt),
+            result.GetValue(mapsOpt),result.GetValue(syncOpt),result.GetValue(debugOpt),result.GetValue(traceOpt),result.GetValue(noblobOpt)));
+            
+        var foo = _rootCommand.Parse(args).InvokeAsync();
 
         Log.CloseAndFlush();
     }
@@ -185,24 +215,20 @@ internal class Program
         if (string.IsNullOrEmpty(f) &&
             string.IsNullOrEmpty(d))
         {
-            var helpBld = new HelpBuilder(LocalizationResources.Instance, Console.WindowWidth);
-            var hc = new HelpContext(helpBld, _rootCommand, Console.Out);
+            var aaa = new CustomHelpAction(new HelpAction());
+            aaa.Invoke(_rootCommand.Parse("-f or -d is required. Exiting"));
 
-            helpBld.Write(hc);
-
-            Log.Warning("-f or -d is required. Exiting");
+            
             Console.WriteLine();
             return;
         }
 
         if (string.IsNullOrEmpty(csv) && string.IsNullOrEmpty(json))
         {
-            var helpBld = new HelpBuilder(LocalizationResources.Instance, Console.WindowWidth);
-            var hc = new HelpContext(helpBld, _rootCommand, Console.Out);
+            var aaa = new CustomHelpAction(new HelpAction());
+            aaa.Invoke(_rootCommand.Parse("--csv or --json is required. Exiting"));
 
-            helpBld.Write(hc);
-
-            Log.Warning("--csv or --json is required. Exiting");
+            
             Console.WriteLine();
             return;
         }
@@ -314,7 +340,7 @@ internal class Program
 
             var files = new List<string>();
 
-#if NET462
+#if !NET9_0_OR_GREATER
             Privilege[] privs = {Privilege.EnableDelegation, Privilege.Impersonate, Privilege.Tcb};
             using var enabler = new PrivilegeEnabler(Privilege.Backup, privs);
             var dirEnumOptions =
@@ -981,6 +1007,25 @@ internal class Program
             return formatType == typeof(ICustomFormatter) ? this : _innerFormatProvider.GetFormat(formatType);
         }
     }
+    private class CustomHelpAction : SynchronousCommandLineAction
+    {
+        private readonly HelpAction _defaultHelp;
+
+        public CustomHelpAction(HelpAction action)
+        {
+            _defaultHelp = action;
+        }
+
+        public override int Invoke(ParseResult parseResult)
+        {
+            var result = _defaultHelp.Invoke(parseResult);
+
+            Log.Warning("{Msg}", string.Join(" ",parseResult.Tokens));
+
+            return result;
+        }
+    }
+    
 }
 
 internal class ApplicationArguments
