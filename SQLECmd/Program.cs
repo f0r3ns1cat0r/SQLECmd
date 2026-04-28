@@ -75,7 +75,7 @@ internal class Program
         
         var fOpt = new Option<string>("-f")
         {
-            Description = "File to recursively process. Either this or -d is required"
+            Description = "File to process. Either this or -d is required"
         };
         
         var dOpt = new Option<string>("-d")
@@ -95,12 +95,12 @@ internal class Program
         var blobdirOpt = new Option<string>(
             "--blobdir")
         {
-            Description = "Directory to save JSON formatted results to. Be sure to include the full path in double quotes"
+            Description = "Directory to save blob data to. Be sure to include the full path in double quotes"
         };
         var mapsOpt = new Option<string>(
             "--maps")
         {
-            Description = "Directory to save JSON formatted results to. Be sure to include the full path in double quotes",
+            Description = "The path where SQL maps are located. Defaults to 'Maps' folder where program was executed",
             DefaultValueFactory = _ => Path.Combine(BaseDirectory, "Maps")
         };
         
@@ -134,7 +134,7 @@ internal class Program
         
         var noblobOpt = new Option<bool>("--noblob")
         {
-            Description = "If true, the latest maps from If true, disables blob extraction from query results are downloaded and local maps updated",
+            Description = "If true, disables blob extraction from query results",
             DefaultValueFactory = _ => false
         };
 
@@ -145,13 +145,14 @@ internal class Program
            csvOpt,
            jsonOpt,
            blobdirOpt,
+           noblobOpt,
            dedupeOpt,
            huntOpt,
            mapsOpt,
            syncOpt,
            debugOpt,
            traceOpt,
-           noblobOpt
+           
          
         };
 
